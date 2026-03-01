@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Detector de Billetes</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <!-- Bootstrap -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <style>
+        body {
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .card-custom {
+            border-radius: 20px;
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+        }
+
+        video {
+            border-radius: 15px;
+            width: 100%;
+            max-height: 300px;
+            object-fit: cover;
+        }
+
+        .resultado {
+            font-size: 1.6rem;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+    <div class="row justify-content-center">
+        <div class="col-lg-6 col-md-8 col-12">
+            <div class="card card-custom p-4 bg-white">
+
+                <h3 class="text-center text-primary mb-3">
+                    Detector de Billetes
+                </h3>
+
+                <!-- Corte -->
+                <div class="mb-3">
+                    <label class="form-label">Seleccione Corte</label>
+                    <select id="corte" class="form-select text-center">
+                        <option value="10">Bs 10</option>
+                        <option value="20">Bs 20</option>
+                        <option value="50" selected>Bs 50</option>
+                    </select>
+                </div>
+
+                <!-- Manual -->
+                <div class="mb-3">
+                    <label class="form-label">Ingresar número manual</label>
+                    <div class="input-group">
+                        <input type="text" id="numeroManual"
+                               class="form-control text-center"
+                               placeholder="Ej: 77123456">
+                        <button class="btn btn-success"
+                                onclick="consultarManual()">
+                            Verificar
+                        </button>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Cámara -->
+                <label class="form-label">Escanear con Cámara</label>
+                <video id="video" autoplay></video>
+
+                <button class="btn btn-primary mt-2 w-100"
+                        onclick="capturar()">
+                    Escanear con Cámara
+                </button>
+
+                <hr>
+
+                <!-- Subir Imagen -->
+                <label class="form-label">Subir Imagen</label>
+                <input type="file" id="imagenInput"
+                       class="form-control"
+                       accept="image/*">
+
+                <button class="btn btn-warning mt-2 w-100"
+                        onclick="subirImagen()">
+                    Analizar Imagen
+                </button>
+
+                <!-- Resultado -->
+                <div id="resultado"
+                     class="resultado mt-4 text-center">
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+const video = document.getElementById("video");
+
+// Activar cámara
+navigator.mediaDevices.getUserMedia({ video: true })
+    .then(stream => video.srcObject = stream)
+    .catch(() => console.log("Cámara no disponible"));
+
+function mostrarResultado(data) {
+    const resultado = document.getElementById("resultado");
+
+    if (data.resultado.includes("PROHIBIDO")) {
+        resultado.className = "resultado mt-4 text-center text-danger";
+    } else if (data.resultado.includes("VALIDO")) {
+        resultado.className = "resultado mt-4 text-center text-success";
+    } else {
+        resultado.className = "resultado mt-4 text-center text-warning";
+    }
+
+    resultado.innerText =
+        data.resultado + " " + (data.numero || "");
+}
+
+// Cámara
+function capturar() {
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(video, 0, 0);
+
+    enviarAlServidor(canvas.toDataURL("image/jpeg"));
+}
+
+// Subir imagen
+function subirImagen() {
+    const file = document.getElementById("imagenInput").files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        enviarAlServidor(e.target.result);
+    };
+    reader.readAsDataURL(file);
+}
+
+// Manual
+function consultarManual() {
+    const numero = document.getElementById("numeroManual").value;
+    if (!numero) return;
+
+    fetch("/procesar_manual", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            numero: numero,
+            corte: document.getElementById("corte").value
+        })
+    })
+    .then(res => res.json())
+    .then(data => mostrarResultado(data));
+}
+
+// Enviar imagen
+function enviarAlServidor(imagenBase64) {
+    fetch("/procesar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+            imagen: imagenBase64,
+            corte: document.getElementById("corte").value
+        })
+    })
+    .then(res => res.json())
+    .then(data => mostrarResultado(data));
+}
+</script>
+
+</body>
+</html>
