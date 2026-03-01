@@ -2,8 +2,6 @@ import os
 import json
 import re
 import base64
-import pandas as pd
-from datetime import datetime
 from flask import Flask, render_template, request, jsonify
 import easyocr
 
@@ -12,7 +10,6 @@ app = Flask(__name__)
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
-# ⚠️ IMPORTANTE: NO cargar EasyOCR aquí (bloquea Render)
 reader = None
 
 # ==============================
@@ -23,7 +20,6 @@ RANGOS_PATH = os.path.join(BASE_DIR, "rangos.json")
 
 with open(RANGOS_PATH) as f:
     rangos = json.load(f)
-
 
 # ==============================
 # FUNCIONES
@@ -36,21 +32,6 @@ def es_prohibido(numero, corte):
         if r["inicio"] <= numero <= r["fin"]:
             return True
     return False
-
-
-def guardar_log(numero, corte, estado):
-    df = pd.DataFrame([{
-        "fecha": datetime.now(),
-        "numero": numero,
-        "corte": corte,
-        "estado": estado
-    }])
-
-    if not os.path.exists("log.csv"):
-        df.to_csv("log.csv", index=False)
-    else:
-        df.to_csv("log.csv", mode="a", header=False, index=False)
-
 
 # ==============================
 # RUTAS
@@ -71,12 +52,7 @@ def procesar_manual():
 
     numero = int(numero)
 
-    if es_prohibido(numero, corte):
-        estado = "🚨 PROHIBIDO"
-    else:
-        estado = "✅ VALIDO"
-
-    guardar_log(numero, corte, estado)
+    estado = "🚨 PROHIBIDO" if es_prohibido(numero, corte) else "✅ VALIDO"
 
     return jsonify({
         "resultado": estado,
@@ -95,11 +71,9 @@ def procesar():
     if not imagen_base64:
         return jsonify({"resultado": "Imagen inválida"})
 
-    # 🔥 Inicializar OCR solo cuando se necesite
     if reader is None:
         reader = easyocr.Reader(['en'], gpu=False)
 
-    # Decodificar imagen
     imagen_bytes = base64.b64decode(imagen_base64.split(",")[1])
     ruta = os.path.join(UPLOAD_FOLDER, "captura.jpg")
 
@@ -117,13 +91,7 @@ def procesar():
             break
 
     if numero_detectado:
-        if es_prohibido(numero_detectado, corte):
-            estado = "🚨 PROHIBIDO"
-        else:
-            estado = "✅ VALIDO"
-
-        guardar_log(numero_detectado, corte, estado)
-
+        estado = "🚨 PROHIBIDO" if es_prohibido(numero_detectado, corte) else "✅ VALIDO"
         return jsonify({
             "resultado": estado,
             "numero": numero_detectado
